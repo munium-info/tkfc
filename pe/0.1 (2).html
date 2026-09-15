@@ -1,0 +1,1637 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>遥控帆船 - 移动版</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body {
+            width: 100%; height: 100%;
+            overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, 'Arial', sans-serif;
+            background: #000;
+            touch-action: none;
+            -webkit-user-select: none;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        canvas { display: block; }
+
+        #top-bar {
+            position: absolute;
+            top: env(safe-area-inset-top, 8px);
+            left: 0; right: 0;
+            padding: 8px 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            pointer-events: none;
+            z-index: 100;
+        }
+
+        #speed-display {
+            background: rgba(0,0,0,0.65);
+            color: #88ff88;
+            padding: 6px 14px;
+            border-radius: 20px;
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255,255,255,0.2);
+            font-size: 18px;
+            font-weight: bold;
+            font-family: monospace;
+            pointer-events: none;
+            text-shadow: 0 0 8px rgba(136,255,136,0.5);
+        }
+        #speed-display .unit {
+            font-size: 11px;
+            color: #aaddff;
+            font-weight: normal;
+        }
+
+        #info-panel {
+            background: rgba(0,0,0,0.65);
+            color: #fff;
+            padding: 8px 14px;
+            border-radius: 14px;
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255,255,255,0.2);
+            font-size: 12px;
+            min-width: 130px;
+            pointer-events: none;
+            margin-right: 50px;
+        }
+        #info-panel .row {
+            display: flex;
+            justify-content: space-between;
+            margin: 3px 0;
+            gap: 12px;
+        }
+        #info-panel .label { color: #aaddff; }
+        #info-panel .value { font-weight: bold; }
+
+        .bar-container {
+            width: 100%;
+            height: 4px;
+            background: rgba(255,255,255,0.15);
+            border-radius: 2px;
+            overflow: hidden;
+            margin: 2px 0;
+        }
+        .bar {
+            height: 100%;
+            border-radius: 2px;
+            transition: width 0.2s;
+        }
+        #wind-bar { background: linear-gradient(90deg, #44aaff, #88ddff); }
+        #sail-bar { background: linear-gradient(90deg, #ffaa44, #ffdd88); }
+
+        /* 摇杆 */
+        .joystick-container {
+            position: fixed;
+            z-index: 150;
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
+        }
+        .joystick-base {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background: radial-gradient(circle at 50% 50%,
+                rgba(255,255,255,0.15) 0%,
+                rgba(255,255,255,0.08) 60%,
+                rgba(0,0,0,0.25) 100%);
+            border: 2px solid rgba(255,255,255,0.3);
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.3),
+                        0 4px 20px rgba(0,0,0,0.4);
+            backdrop-filter: blur(4px);
+            pointer-events: none;
+        }
+        .joystick-knob {
+            position: absolute;
+            border-radius: 50%;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            background: radial-gradient(circle at 35% 35%,
+                rgba(255,255,255,0.9) 0%,
+                rgba(160,200,255,0.7) 40%,
+                rgba(60,120,200,0.5) 100%);
+            border: 2px solid rgba(255,255,255,0.6);
+            box-shadow: 0 4px 16px rgba(0,0,0,0.4),
+                        inset 0 -2px 8px rgba(0,0,0,0.2);
+            pointer-events: none;
+        }
+        .joystick-label {
+            position: absolute;
+            top: -22px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255,255,255,0.9);
+            font-size: 10px;
+            font-weight: bold;
+            letter-spacing: 0.5px;
+            white-space: nowrap;
+            text-shadow: 0 0 4px rgba(0,0,0,0.8);
+            pointer-events: none;
+        }
+        .direction-hint {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 100%;
+            height: 100%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            opacity: 0.35;
+        }
+        .direction-hint::before,
+        .direction-hint::after {
+            content: '';
+            position: absolute;
+            background: rgba(255,255,255,0.5);
+        }
+        .direction-hint::before {
+            top: 50%;
+            left: 10%;
+            width: 80%;
+            height: 1px;
+            transform: translateY(-50%);
+        }
+        .direction-hint::after {
+            left: 50%;
+            top: 10%;
+            width: 1px;
+            height: 80%;
+            transform: translateX(-50%);
+        }
+        .joy-icon {
+            position: absolute;
+            font-size: 9px;
+            color: rgba(255,255,255,0.7);
+            text-shadow: 0 0 4px rgba(0,0,0,0.8);
+            white-space: nowrap;
+            pointer-events: none;
+        }
+        .joy-icon.top { top: 4px; left: 50%; transform: translateX(-50%); }
+        .joy-icon.bottom { bottom: 4px; left: 50%; transform: translateX(-50%); }
+        .joy-icon.left { left: 4px; top: 50%; transform: translateY(-50%); }
+        .joy-icon.right { right: 4px; top: 50%; transform: translateY(-50%); }
+
+        #left-joystick {
+            bottom: calc(max(env(safe-area-inset-bottom, 20px), 20px));
+            left: calc(max(env(safe-area-inset-left, 20px), 20px));
+            width: 140px;
+            height: 140px;
+        }
+        #left-joystick .joystick-knob {
+            width: 60px;
+            height: 60px;
+            background: radial-gradient(circle at 35% 35%,
+                rgba(255,255,255,0.9) 0%,
+                rgba(160,220,255,0.7) 40%,
+                rgba(60,160,200,0.5) 100%);
+        }
+        #left-joystick .joystick-label { color: #88ddff; font-size: 11px; }
+
+        #right-controls {
+            position: fixed;
+            bottom: calc(max(env(safe-area-inset-bottom, 20px), 20px));
+            right: calc(max(env(safe-area-inset-right, 20px), 20px));
+            display: flex;
+            gap: 10px;
+            align-items: flex-end;
+            z-index: 150;
+            touch-action: none;
+            pointer-events: none;
+        }
+
+        #rudder-joystick {
+            position: relative;
+            width: 110px;
+            height: 110px;
+            touch-action: none;
+            pointer-events: auto;
+        }
+        #rudder-joystick .joystick-knob {
+            width: 48px;
+            height: 48px;
+            background: radial-gradient(circle at 35% 35%,
+                rgba(255,255,255,0.9) 0%,
+                rgba(160,255,200,0.7) 40%,
+                rgba(60,180,120,0.5) 100%);
+        }
+        #rudder-joystick .joystick-label { color: #88ffaa; font-size: 10px; }
+
+        #sail-joystick {
+            position: relative;
+            width: 110px;
+            height: 110px;
+            touch-action: none;
+            pointer-events: auto;
+        }
+        #sail-joystick .joystick-knob {
+            width: 48px;
+            height: 48px;
+            background: radial-gradient(circle at 35% 35%,
+                rgba(255,255,255,0.9) 0%,
+                rgba(255,220,160,0.7) 40%,
+                rgba(200,140,60,0.5) 100%);
+        }
+        #sail-joystick .joystick-label { color: #ffcc88; font-size: 10px; }
+
+        #wind-compass-mini {
+            position: absolute;
+            top: env(safe-area-inset-top, 8px);
+            left: 50%;
+            transform: translateX(-50%);
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: rgba(0,0,0,0.55);
+            border: 2px solid rgba(255,255,255,0.3);
+            backdrop-filter: blur(8px);
+            z-index: 100;
+            pointer-events: none;
+        }
+        #wind-compass-mini .n { position: absolute; top: 2px; left: 50%; transform: translateX(-50%); font-size: 9px; color: #ff8888; font-weight: bold; }
+        #wind-compass-mini .s { position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%); font-size: 9px; color: rgba(255,255,255,0.6); }
+        #wind-compass-mini .e { position: absolute; right: 2px; top: 50%; transform: translateY(-50%); font-size: 9px; color: rgba(255,255,255,0.6); }
+        #wind-compass-mini .w { position: absolute; left: 2px; top: 50%; transform: translateY(-50%); font-size: 9px; color: rgba(255,255,255,0.6); }
+        #wind-arrow-mini {
+            position: absolute;
+            top: 50%; left: 50%;
+            width: 0; height: 0;
+            border-left: 5px solid transparent;
+            border-right: 5px solid transparent;
+            border-bottom: 20px solid #44ddff;
+            transform-origin: 50% 100%;
+            transform: translate(-50%, -100%) rotate(0deg);
+            transition: transform 0.4s;
+            filter: drop-shadow(0 0 3px #44ddff);
+        }
+
+        #next-target {
+            position: absolute;
+            top: 76px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 221, 0, 0.25);
+            color: #ffdd00;
+            padding: 4px 12px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: bold;
+            z-index: 100;
+            border: 1px solid rgba(255, 221, 0, 0.5);
+            backdrop-filter: blur(6px);
+            pointer-events: none;
+            letter-spacing: 0.5px;
+            white-space: nowrap;
+        }
+
+        #pause-btn {
+            position: absolute;
+            top: env(safe-area-inset-top, 8px);
+            right: 12px;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: rgba(0,0,0,0.6);
+            border: 1px solid rgba(255,255,255,0.3);
+            backdrop-filter: blur(8px);
+            z-index: 160;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: #fff;
+            font-size: 18px;
+            cursor: pointer;
+            touch-action: manipulation;
+        }
+        #pause-btn:active { background: rgba(255,255,255,0.2); }
+
+        #start-overlay {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0,0,0,0.9);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 300;
+            backdrop-filter: blur(10px);
+            padding: 20px;
+        }
+        #start-overlay.hidden { display: none; }
+        #start-panel {
+            text-align: center;
+            color: #fff;
+            max-width: 400px;
+            width: 100%;
+            padding: 30px 20px;
+            background: rgba(20,40,60,0.8);
+            border-radius: 20px;
+            border: 1px solid rgba(100,200,255,0.4);
+            box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+        }
+        #start-panel h1 {
+            font-size: 26px;
+            margin-bottom: 8px;
+            color: #88ddff;
+            letter-spacing: 2px;
+        }
+        #start-panel .subtitle {
+            color: #aaddff;
+            font-size: 13px;
+            margin-bottom: 20px;
+        }
+        #start-panel .controls-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 10px;
+            margin: 16px 0;
+            text-align: left;
+            font-size: 12px;
+        }
+        #start-panel .controls-grid .item {
+            background: rgba(255,255,255,0.08);
+            padding: 10px 12px;
+            border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.15);
+            line-height: 1.5;
+        }
+        #start-panel .item-title {
+            color: #88ddff;
+            font-weight: bold;
+            margin-bottom: 2px;
+            font-size: 13px;
+        }
+        #start-panel .click-hint {
+            font-size: 16px;
+            color: #ffdd66;
+            margin-top: 20px;
+            animation: pulse 1.5s infinite;
+            font-weight: bold;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        #pause-overlay {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 290;
+            backdrop-filter: blur(6px);
+        }
+        #pause-overlay.hidden { display: none; }
+        #pause-panel {
+            text-align: center;
+            color: #fff;
+            padding: 30px 50px;
+            background: rgba(20,40,60,0.9);
+            border-radius: 20px;
+            border: 1px solid rgba(100,200,255,0.4);
+        }
+        #pause-panel h2 {
+            font-size: 28px;
+            margin-bottom: 10px;
+            color: #88ddff;
+            letter-spacing: 4px;
+        }
+        #pause-panel .click-hint {
+            font-size: 14px;
+            color: #ffdd66;
+            animation: pulse 1.5s infinite;
+        }
+
+        #hit-flash {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(255, 80, 80, 0.35);
+            opacity: 0;
+            pointer-events: none;
+            z-index: 80;
+            transition: opacity 0.15s;
+        }
+
+        #toast {
+            position: fixed;
+            top: 45%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0.8);
+            background: rgba(68, 255, 136, 0.9);
+            color: #003322;
+            padding: 12px 24px;
+            border-radius: 14px;
+            font-size: 18px;
+            font-weight: bold;
+            letter-spacing: 1px;
+            z-index: 200;
+            pointer-events: none;
+            opacity: 0;
+            transition: all 0.3s;
+            box-shadow: 0 0 30px rgba(68, 255, 136, 0.6);
+            border: 2px solid #aaffcc;
+            white-space: nowrap;
+        }
+        #toast.show {
+            opacity: 1;
+            transform: translate(-50%, -50%) scale(1);
+        }
+        #toast.error {
+            background: rgba(255, 100, 100, 0.9);
+            color: #fff;
+            border-color: #ffcccc;
+            box-shadow: 0 0 30px rgba(255, 100, 100, 0.6);
+        }
+
+        @media (max-height: 450px) and (orientation: landscape) {
+            #left-joystick { width: 120px; height: 120px; }
+            #left-joystick .joystick-knob { width: 52px; height: 52px; }
+            #rudder-joystick, #sail-joystick { width: 90px; height: 90px; }
+            #rudder-joystick .joystick-knob,
+            #sail-joystick .joystick-knob { width: 40px; height: 40px; }
+            #wind-compass-mini { width: 50px; height: 50px; }
+        }
+
+        @media (max-width: 500px) {
+            #left-joystick { width: 120px; height: 120px; }
+            #left-joystick .joystick-knob { width: 52px; height: 52px; }
+            #rudder-joystick, #sail-joystick { width: 95px; height: 95px; }
+            #rudder-joystick .joystick-knob,
+            #sail-joystick .joystick-knob { width: 42px; height: 42px; }
+        }
+    </style>
+</head>
+<body>
+    <div id="hit-flash"></div>
+
+    <div id="start-overlay">
+        <div id="start-panel">
+            <h1>⛵ 遥控帆船</h1>
+            <div class="subtitle">移动版 · 驶入黄圈完成绕标</div>
+            <div class="controls-grid">
+                <div class="item">
+                    <div class="item-title">📷 左摇杆（左下角）</div>
+                    左右拖 → 转动视角<br>
+                    上下拖 → 抬头 / 低头
+                </div>
+                <div class="item">
+                    <div class="item-title">⚙️ 舵摇杆（右下角左侧）</div>
+                    左右拖 → 左舵 / 右舵<br>
+                    松手自动回中
+                </div>
+                <div class="item">
+                    <div class="item-title">⛵ 帆摇杆（右下角右侧）</div>
+                    向上拖 → 收帆<br>
+                    向下拖 → 放帆
+                </div>
+            </div>
+            <div class="click-hint">点击开始</div>
+        </div>
+    </div>
+
+    <div id="pause-overlay" class="hidden">
+        <div id="pause-panel">
+            <h2>⏸ 已暂停</h2>
+            <div class="click-hint">点击继续</div>
+        </div>
+    </div>
+
+    <div id="top-bar">
+        <div id="speed-display">
+            <span id="speed-value">0.0</span>
+            <span class="unit">节</span>
+        </div>
+        <div id="info-panel">
+            <div class="row">
+                <span class="label">风力</span>
+                <span class="value"><span id="wind-power-value">5.0</span> 级</span>
+            </div>
+            <div class="bar-container"><div class="bar" id="wind-bar" style="width: 50%;"></div></div>
+            <div class="row" style="margin-top: 6px;">
+                <span class="label">收帆</span>
+                <span class="value"><span id="sail-value">50</span>%</span>
+            </div>
+            <div class="bar-container"><div class="bar" id="sail-bar" style="width: 50%;"></div></div>
+        </div>
+    </div>
+
+    <div id="wind-compass-mini">
+        <span class="n">N</span>
+        <span class="s">S</span>
+        <span class="e">E</span>
+        <span class="w">W</span>
+        <div id="wind-arrow-mini"></div>
+    </div>
+
+    <div id="next-target">🎯 穿越起航线</div>
+
+    <div id="pause-btn">⏸</div>
+
+    <div id="toast"></div>
+
+    <!-- 左摇杆：相机 -->
+    <div class="joystick-container" id="left-joystick">
+        <div class="joystick-base">
+            <div class="direction-hint"></div>
+            <span class="joy-icon top">▲</span>
+            <span class="joy-icon bottom">▼</span>
+            <span class="joy-icon left">◀</span>
+            <span class="joy-icon right">▶</span>
+        </div>
+        <div class="joystick-knob"></div>
+        <div class="joystick-label">📷 相机</div>
+    </div>
+
+    <!-- 右下角控制区：舵 + 帆 -->
+    <div id="right-controls">
+        <div class="joystick-container" id="rudder-joystick">
+            <div class="joystick-base">
+                <div class="direction-hint"></div>
+                <span class="joy-icon left">◀</span>
+                <span class="joy-icon right">▶</span>
+            </div>
+            <div class="joystick-knob"></div>
+            <div class="joystick-label">⚙️ 舵</div>
+        </div>
+
+        <div class="joystick-container" id="sail-joystick">
+            <div class="joystick-base">
+                <div class="direction-hint"></div>
+                <span class="joy-icon top">收</span>
+                <span class="joy-icon bottom">放</span>
+            </div>
+            <div class="joystick-knob"></div>
+            <div class="joystick-label">⛵ 帆</div>
+        </div>
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.128.0/build/three.module.js"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87CEEB);
+        scene.fog = new THREE.Fog(0x87CEEB, 40, 150);
+
+        const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 10, 15);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.shadowMap.bias = 0.0001;
+        renderer.domElement.style.touchAction = 'none';
+        document.body.appendChild(renderer.domElement);
+
+        let isPaused = false;
+        const pauseOverlay = document.getElementById('pause-overlay');
+        const pauseBtn = document.getElementById('pause-btn');
+
+        function pauseGame() {
+            isPaused = true;
+            pauseOverlay.classList.remove('hidden');
+        }
+        function resumeGame() {
+            isPaused = false;
+            pauseOverlay.classList.add('hidden');
+        }
+
+        pauseBtn.addEventListener('click', () => {
+            if (isPaused) resumeGame(); else pauseGame();
+        });
+        pauseOverlay.addEventListener('click', resumeGame);
+
+        const cameraState = {
+            yaw: 0,
+            pitch: 0.45,
+            distance: 12,
+            targetOffset: new THREE.Vector3(0, 1.2, 0),
+            smoothYaw: 0,
+            smoothPitch: 0.45
+        };
+
+        scene.add(new THREE.AmbientLight(0x505070));
+        const sunLight = new THREE.DirectionalLight(0xfff5e6, 1.2);
+        sunLight.position.set(10, 20, 5);
+        sunLight.castShadow = true;
+        sunLight.shadow.mapSize.width = 1024;
+        sunLight.shadow.mapSize.height = 1024;
+        const d = 40;
+        sunLight.shadow.camera.left = -d;
+        sunLight.shadow.camera.right = d;
+        sunLight.shadow.camera.top = d;
+        sunLight.shadow.camera.bottom = -d;
+        sunLight.shadow.camera.near = 1;
+        sunLight.shadow.camera.far = 80;
+        sunLight.shadow.bias = -0.0005;
+        scene.add(sunLight);
+
+        const backLight = new THREE.DirectionalLight(0xaaccff, 0.5);
+        backLight.position.set(-10, 5, -10);
+        scene.add(backLight);
+
+        const waterGeometry = new THREE.PlaneGeometry(120, 120, 64, 64);
+        const waterMaterial = new THREE.MeshPhongMaterial({
+            color: 0x2a6f97, emissive: 0x0a1f2e, specular: 0xffffff,
+            shininess: 60, transparent: true, opacity: 0.85, side: THREE.DoubleSide
+        });
+        const water = new THREE.Mesh(waterGeometry, waterMaterial);
+        water.rotation.x = -Math.PI / 2;
+        water.receiveShadow = true;
+        scene.add(water);
+
+        const gridHelper = new THREE.GridHelper(120, 40, 0x88ccff, 0x4488aa);
+        gridHelper.position.y = 0.01;
+        scene.add(gridHelper);
+
+        const sparkleGeometry = new THREE.BufferGeometry();
+        const sparkleCount = 800;
+        const sparklePositions = new Float32Array(sparkleCount * 3);
+        for (let i = 0; i < sparkleCount; i++) {
+            sparklePositions[i*3] = (Math.random() - 0.5) * 120;
+            sparklePositions[i*3+1] = 0.05 + Math.random() * 0.1;
+            sparklePositions[i*3+2] = (Math.random() - 0.5) * 120;
+        }
+        sparkleGeometry.setAttribute('position', new THREE.BufferAttribute(sparklePositions, 3));
+        const sparkles = new THREE.Points(sparkleGeometry, new THREE.PointsMaterial({
+            color: 0xffffff, size: 0.15, transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending
+        }));
+        scene.add(sparkles);
+
+        const windParticleCount = 200;
+        const windParticleGeo = new THREE.BufferGeometry();
+        const windParticlePositions = new Float32Array(windParticleCount * 3);
+        const windParticleSpeeds = new Float32Array(windParticleCount);
+        for (let i = 0; i < windParticleCount; i++) {
+            windParticlePositions[i*3] = (Math.random() - 0.5) * 80;
+            windParticlePositions[i*3+1] = 0.5 + Math.random() * 8;
+            windParticlePositions[i*3+2] = (Math.random() - 0.5) * 80;
+            windParticleSpeeds[i] = 0.5 + Math.random() * 0.5;
+        }
+        windParticleGeo.setAttribute('position', new THREE.BufferAttribute(windParticlePositions, 3));
+        const windParticles = new THREE.Points(windParticleGeo, new THREE.PointsMaterial({
+            color: 0xaaddff, size: 0.12, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending
+        }));
+        scene.add(windParticles);
+
+        function createCloud(x, y, z) {
+            const g = new THREE.Group();
+            const m = new THREE.MeshPhongMaterial({ color: 0xffffff, transparent: true, opacity: 0.85, emissive: 0xaaaaaa });
+            const geo = new THREE.SphereGeometry(1, 7, 7);
+            const p1 = new THREE.Mesh(geo, m); p1.scale.set(1.2, 0.8, 0.8);
+            const p2 = new THREE.Mesh(geo, m); p2.scale.set(0.9, 0.6, 0.6); p2.position.set(1.2, 0.2, 0.3);
+            const p3 = new THREE.Mesh(geo, m); p3.scale.set(1.1, 0.7, 0.7); p3.position.set(-1.1, 0.1, -0.2);
+            g.add(p1, p2, p3); g.position.set(x, y, z);
+            return g;
+        }
+        scene.add(createCloud(-20, 15, -25));
+        scene.add(createCloud(15, 16, -30));
+        scene.add(createCloud(25, 12, 20));
+        scene.add(createCloud(-25, 13, 25));
+
+        const buoys = [];
+        const BUOY_RADIUS = 0.7;
+        const BOAT_RADIUS = 1.0;
+        const CHECKPOINT_RADIUS = 2.5;
+
+        function createBuoy(x, z, color, type, label) {
+            const group = new THREE.Group();
+            const baseMat = new THREE.MeshStandardMaterial({
+                color: color, emissive: color, emissiveIntensity: 0.5,
+                roughness: 0.5, metalness: 0.2
+            });
+            const sphere = new THREE.Mesh(new THREE.SphereGeometry(0.5, 20, 20), baseMat);
+            sphere.position.y = 0.5;
+            sphere.castShadow = true; sphere.receiveShadow = true;
+            group.add(sphere);
+
+            const poleMat = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0x444444 });
+            const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.4, 8), poleMat);
+            pole.position.y = 1.4;
+            pole.castShadow = true;
+            group.add(pole);
+
+            if (label) {
+                const canvas = document.createElement('canvas');
+                canvas.width = 128; canvas.height = 128;
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = '#ffffff';
+                ctx.beginPath();
+                ctx.arc(64, 64, 56, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = type === 'start' ? '#cc8800' : '#cc0000';
+                ctx.font = 'bold 90px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(label, 64, 68);
+                const texture = new THREE.CanvasTexture(canvas);
+                const spriteMat = new THREE.SpriteMaterial({ map: texture, depthTest: false });
+                const sprite = new THREE.Sprite(spriteMat);
+                sprite.scale.set(1.4, 1.4, 1);
+                sprite.position.y = 2.6;
+                group.add(sprite);
+            }
+
+            const ringMat = new THREE.MeshStandardMaterial({
+                color: color, emissive: color, emissiveIntensity: 0.6,
+                transparent: true, opacity: 0.7
+            });
+            const ring = new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.08, 8, 20), ringMat);
+            ring.rotation.x = -Math.PI / 2;
+            ring.position.y = 0.05;
+            group.add(ring);
+
+            group.position.set(x, 0, z);
+            scene.add(group);
+
+            const buoyData = {
+                mesh: group, x, z,
+                radius: BUOY_RADIUS,
+                type, label,
+                baseY: 0,
+                phaseOffset: Math.random() * Math.PI * 2,
+                visited: false,
+                stuckTimer: 0,
+                sphereMaterial: baseMat,
+                ringMat: ringMat,
+                checkpointZone: null
+            };
+            buoys.push(buoyData);
+            return group;
+        }
+
+        function createCheckpointZone(x, z, radius, label) {
+            const group = new THREE.Group();
+
+            const ringGeo = new THREE.RingGeometry(radius - 0.15, radius, 64);
+            const ringMat = new THREE.MeshBasicMaterial({
+                color: 0xffaa00,
+                side: THREE.DoubleSide,
+                transparent: true,
+                opacity: 0.35,
+                depthWrite: false
+            });
+            const ring = new THREE.Mesh(ringGeo, ringMat);
+            ring.rotation.x = -Math.PI / 2;
+            ring.position.y = 0.08;
+            group.add(ring);
+
+            const dashCount = 24;
+            const dashMat = new THREE.MeshBasicMaterial({
+                color: 0xffdd44,
+                transparent: true,
+                opacity: 0.6,
+                depthWrite: false
+            });
+            const dashes = [];
+            for (let i = 0; i < dashCount; i++) {
+                const angle = (i / dashCount) * Math.PI * 2;
+                const dashGeo = new THREE.PlaneGeometry(radius * 0.15, 0.15);
+                const dash = new THREE.Mesh(dashGeo, dashMat);
+                dash.rotation.x = -Math.PI / 2;
+                dash.rotation.z = -angle;
+                dash.position.set(
+                    Math.cos(angle) * (radius - 0.3),
+                    0.09,
+                    Math.sin(angle) * (radius - 0.3)
+                );
+                group.add(dash);
+                dashes.push(dash);
+            }
+
+            const fillGeo = new THREE.CircleGeometry(radius - 0.15, 32);
+            const fillMat = new THREE.MeshBasicMaterial({
+                color: 0xffaa00,
+                transparent: true,
+                opacity: 0.06,
+                side: THREE.DoubleSide,
+                depthWrite: false
+            });
+            const fill = new THREE.Mesh(fillGeo, fillMat);
+            fill.rotation.x = -Math.PI / 2;
+            fill.position.y = 0.07;
+            group.add(fill);
+
+            group.position.set(x, 0, z);
+            scene.add(group);
+
+            return {
+                group: group,
+                ring: ring,
+                ringMat: ringMat,
+                fill: fill,
+                fillMat: fillMat,
+                dashes: dashes
+            };
+        }
+
+        function createStartLineZone() {
+            const group = new THREE.Group();
+            const width = START_LINE_X_RANGE * 2;
+            const depth = 1.5;
+
+            const bandGeo = new THREE.PlaneGeometry(width, depth);
+            const bandMat = new THREE.MeshBasicMaterial({
+                color: 0xffff00,
+                transparent: true,
+                opacity: 0.15,
+                side: THREE.DoubleSide,
+                depthWrite: false
+            });
+            const band = new THREE.Mesh(bandGeo, bandMat);
+            band.rotation.x = -Math.PI / 2;
+            band.position.y = 0.06;
+            group.add(band);
+
+            const dashCount = 30;
+            const dashMat = new THREE.MeshBasicMaterial({
+                color: 0xffff00,
+                transparent: true,
+                opacity: 0.5,
+                depthWrite: false
+            });
+            for (let side = 0; side < 2; side++) {
+                const zPos = (side === 0 ? -1 : 1) * depth / 2;
+                for (let i = 0; i < dashCount; i++) {
+                    const xPos = -width / 2 + (i + 0.5) * (width / dashCount);
+                    const dashGeo = new THREE.PlaneGeometry(width / dashCount * 0.6, 0.15);
+                    const dash = new THREE.Mesh(dashGeo, dashMat);
+                    dash.rotation.x = -Math.PI / 2;
+                    dash.position.set(xPos, 0.07, zPos);
+                    group.add(dash);
+                }
+            }
+
+            group.position.set(0, 0, START_LINE_Z);
+            scene.add(group);
+            return group;
+        }
+
+        const START_LINE_Z = -25;
+        const START_LINE_X_RANGE = 8;
+
+        createBuoy(-8, -25, 0xffdd00, 'start', 'S');
+        createBuoy(8, -25, 0xffdd00, 'start', 'S');
+        createBuoy(0, 25, 0xff3333, 'checkpoint', '1');
+        buoys[2].checkpointZone = createCheckpointZone(0, 25, CHECKPOINT_RADIUS, '1');
+        createBuoy(-25, -5, 0xff3333, 'checkpoint', '2');
+        buoys[3].checkpointZone = createCheckpointZone(-25, -5, CHECKPOINT_RADIUS, '2');
+        createBuoy(25, -5, 0xff3333, 'checkpoint', '3');
+        buoys[4].checkpointZone = createCheckpointZone(25, -5, CHECKPOINT_RADIUS, '3');
+
+        createStartLineZone();
+
+        const boatStartPos = new THREE.Vector3(0, 0.1, -30);
+        const boatStartHeading = 0;
+
+        const boatGroup = new THREE.Group();
+        const boatTiltGroup = new THREE.Group();
+        boatTiltGroup.rotation.order = 'YXZ';
+        boatGroup.add(boatTiltGroup);
+
+        const hullMat = new THREE.MeshStandardMaterial({ color: 0x8B4513, roughness: 0.6, metalness: 0.1 });
+        const hullMat2 = new THREE.MeshStandardMaterial({ color: 0xD2B48C, roughness: 0.7 });
+
+        const bottom = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 8), hullMat);
+        bottom.scale.set(1.5, 0.2, 0.8); bottom.position.y = 0.2;
+        bottom.castShadow = true; bottom.receiveShadow = true;
+        boatTiltGroup.add(bottom);
+
+        const sideMat = new THREE.MeshStandardMaterial({ color: 0xA0522D });
+        const leftSide = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.4, 0.2), sideMat);
+        leftSide.position.set(0, 0.5, 0.8); leftSide.castShadow = true; leftSide.receiveShadow = true;
+        boatTiltGroup.add(leftSide);
+        const rightSide = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.4, 0.2), sideMat);
+        rightSide.position.set(0, 0.5, -0.8); rightSide.castShadow = true; rightSide.receiveShadow = true;
+        boatTiltGroup.add(rightSide);
+
+        const bow = new THREE.Mesh(new THREE.ConeGeometry(0.7, 1.2, 8), hullMat2);
+        bow.rotation.z = -Math.PI / 2;
+        bow.position.set(1.5, 0.4, 0);
+        bow.scale.set(1, 1, 0.8);
+        bow.castShadow = true; bow.receiveShadow = true;
+        boatTiltGroup.add(bow);
+
+        const stern = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.6, 1.6), hullMat2);
+        stern.position.set(-1.4, 0.5, 0); stern.castShadow = true; stern.receiveShadow = true;
+        boatTiltGroup.add(stern);
+
+        const deck = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.1, 1.5), new THREE.MeshStandardMaterial({ color: 0xDEB887 }));
+        deck.position.set(0, 0.7, 0); deck.castShadow = true; deck.receiveShadow = true;
+        boatTiltGroup.add(deck);
+
+        const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 2.8, 8), new THREE.MeshStandardMaterial({ color: 0xCD853F }));
+        mast.position.set(0.2, 2.1, 0); mast.castShadow = true; mast.receiveShadow = true;
+        boatTiltGroup.add(mast);
+
+        const mainSailGroup = new THREE.Group();
+        const sailMat = new THREE.MeshStandardMaterial({ color: 0xFFFFFF, side: THREE.DoubleSide, emissive: 0xdddddd, emissiveIntensity: 0.3 });
+        const sailGeo = new THREE.BoxGeometry(2.0, 2.0, 0.05);
+        const sail = new THREE.Mesh(sailGeo, sailMat);
+        sail.position.set(-0.9, 0, 0);
+        sail.castShadow = true; sail.receiveShadow = true;
+        mainSailGroup.add(sail);
+        mainSailGroup.position.set(0.2, 2.1, 0);
+        boatTiltGroup.add(mainSailGroup);
+
+        const jibGroup = new THREE.Group();
+        const jibMat = new THREE.MeshStandardMaterial({ color: 0xFFF8DC, side: THREE.DoubleSide, emissive: 0xcccccc, emissiveIntensity: 0.2 });
+        const jibGeo = new THREE.BoxGeometry(1.4, 1.6, 0.04);
+        const jib = new THREE.Mesh(jibGeo, jibMat);
+        jib.position.set(-0.6, 0, 0);
+        jib.castShadow = true; jib.receiveShadow = true;
+        jibGroup.add(jib);
+        jibGroup.position.set(1.2, 1.6, 0);
+        boatTiltGroup.add(jibGroup);
+
+        const rudderPivot = new THREE.Group();
+        const rudderBlade = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.6, 0.4), new THREE.MeshStandardMaterial({ color: 0x654321 }));
+        rudderBlade.position.set(0, -0.3, 0);
+        rudderBlade.castShadow = true;
+        rudderPivot.add(rudderBlade);
+        rudderPivot.position.set(-1.6, 0.5, 0);
+        boatTiltGroup.add(rudderPivot);
+
+        boatGroup.position.copy(boatStartPos);
+        scene.add(boatGroup);
+
+        const boatState = {
+            speed: 0,
+            heading: boatStartHeading,
+            rudder: 0,
+            sailTrim: 0.5,
+            maxSpeed: 7.0,
+            sailVisual: 0,
+            jibVisual: 0,
+            hitCooldown: 0,
+            knockbackX: 0,
+            knockbackZ: 0,
+            heel: 0,
+            heelTarget: 0,
+            pitch: 0,
+            pitchTarget: 0
+        };
+
+        const windState = {
+            direction: Math.PI,
+            baseDirection: Math.PI,
+            power: 5.0,
+            maxPower: 10.0,
+            minPower: 2.0,
+            changeTimer: 0,
+            targetDirection: Math.PI,
+            targetPower: 5.0,
+            vector: new THREE.Vector3(0, 0, 1)
+        };
+
+        function updateWindVector() {
+            windState.vector.set(Math.sin(windState.direction), 0, -Math.cos(windState.direction)).normalize();
+        }
+        updateWindVector();
+
+        const raceState = {
+            checkpointSequence: [2, 3, 4],
+            currentStep: 0,
+            checkpointsHit: 0,
+            totalCheckpoints: 3,
+            lapCount: 0,
+            startTime: 0,
+            raceActive: false,
+            crossedStartLine: false,
+            lastPos: new THREE.Vector3().copy(boatStartPos)
+        };
+
+        // ============================================================
+        // 摇杆类（用 Pointer Events，同时支持触摸和鼠标）
+        // ============================================================
+        class Joystick {
+            constructor(elementId, options = {}) {
+                this.element = document.getElementById(elementId);
+                this.knob = this.element.querySelector('.joystick-knob');
+                this.x = 0;
+                this.y = 0;
+                this.pointerId = null;
+                this.active = false;
+                this.maxRadius = 55;
+                this.lockAxis = options.lockAxis || null;
+                this.autoCenter = options.autoCenter || false;
+                this.centerSpeed = options.centerSpeed || 8;
+
+                // 强制元素接受指针事件
+                this.element.style.pointerEvents = 'auto';
+                this.element.style.touchAction = 'none';
+
+                this.bindEvents();
+            }
+
+            bindEvents() {
+                // 用 pointerdown/pointermove/pointerup 统一处理
+                this.element.addEventListener('pointerdown', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (this.pointerId !== null) return;
+
+                    this.pointerId = e.pointerId;
+                    this.active = true;
+
+                    const rect = this.element.getBoundingClientRect();
+                    this.maxRadius = rect.width * 0.42;
+
+                    // 捕获指针，保证移出元素后仍能收到事件
+                    try {
+                        this.element.setPointerCapture(e.pointerId);
+                    } catch (err) {}
+
+                    this.updateFromEvent(e);
+                }, { passive: false });
+
+                this.element.addEventListener('pointermove', (e) => {
+                    if (this.pointerId !== e.pointerId) return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    this.updateFromEvent(e);
+                }, { passive: false });
+
+                const endHandler = (e) => {
+                    if (this.pointerId !== e.pointerId) return;
+                    e.preventDefault();
+                    e.stopPropagation();
+
+                    try {
+                        this.element.releasePointerCapture(e.pointerId);
+                    } catch (err) {}
+
+                    this.pointerId = null;
+                    this.active = false;
+
+                    if (!this.autoCenter) {
+                        this.x = 0;
+                        this.y = 0;
+                        this.knob.style.transform = 'translate(-50%, -50%)';
+                    }
+                };
+
+                this.element.addEventListener('pointerup', endHandler, { passive: false });
+                this.element.addEventListener('pointercancel', endHandler, { passive: false });
+                this.element.addEventListener('pointerleave', (e) => {
+                    // 如果没有捕获指针，pointerleave 时才结束
+                    if (this.pointerId === e.pointerId && !this.element.hasPointerCapture(e.pointerId)) {
+                        endHandler(e);
+                    }
+                }, { passive: false });
+            }
+
+            updateFromEvent(e) {
+                const rect = this.element.getBoundingClientRect();
+                const centerX = rect.left + rect.width / 2;
+                const centerY = rect.top + rect.height / 2;
+                this.setPosition(e.clientX - centerX, e.clientY - centerY);
+            }
+
+            setPosition(dx, dy) {
+                if (this.lockAxis === 'x') dy = 0;
+                if (this.lockAxis === 'y') dx = 0;
+
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                let nx, ny;
+
+                if (dist > this.maxRadius) {
+                    nx = dx / dist;
+                    ny = dy / dist;
+                    this.x = nx;
+                    this.y = ny;
+                    this.knob.style.transform = `translate(calc(-50% + ${nx * this.maxRadius}px), calc(-50% + ${ny * this.maxRadius}px))`;
+                } else {
+                    this.x = dx / this.maxRadius;
+                    this.y = dy / this.maxRadius;
+                    this.knob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+                }
+            }
+
+            updateAutoCenter(delta) {
+                if (this.autoCenter && !this.active && (Math.abs(this.x) > 0.001 || Math.abs(this.y) > 0.001)) {
+                    const decay = Math.pow(0.001, delta * this.centerSpeed / 8);
+                    this.x *= decay;
+                    this.y *= decay;
+                    if (Math.abs(this.x) < 0.005) this.x = 0;
+                    if (Math.abs(this.y) < 0.005) this.y = 0;
+                    const px = this.x * this.maxRadius;
+                    const py = this.y * this.maxRadius;
+                    this.knob.style.transform = `translate(calc(-50% + ${px}px), calc(-50% + ${py}px))`;
+                }
+            }
+        }
+
+        const leftJoystick = new Joystick('left-joystick');
+        const rudderJoystick = new Joystick('rudder-joystick', {
+            lockAxis: 'x',
+            autoCenter: true,
+            centerSpeed: 10
+        });
+        const sailJoystick = new Joystick('sail-joystick', {
+            lockAxis: 'y'
+        });
+
+        const speedSpan = document.getElementById('speed-value');
+        const windPowerSpan = document.getElementById('wind-power-value');
+        const windBar = document.getElementById('wind-bar');
+        const sailValueEl = document.getElementById('sail-value');
+        const sailBar = document.getElementById('sail-bar');
+        const windArrowMini = document.getElementById('wind-arrow-mini');
+        const nextTargetEl = document.getElementById('next-target');
+        const toastEl = document.getElementById('toast');
+        const hitFlash = document.getElementById('hit-flash');
+
+        function showToast(text, isError = false) {
+            toastEl.textContent = text;
+            toastEl.classList.toggle('error', isError);
+            toastEl.classList.add('show');
+            clearTimeout(showToast._timer);
+            showToast._timer = setTimeout(() => {
+                toastEl.classList.remove('show');
+            }, 1200);
+        }
+
+        function updateNextTargetText() {
+            if (!raceState.raceActive) {
+                nextTargetEl.textContent = '🎯 穿越起航线';
+            } else if (raceState.currentStep < raceState.checkpointSequence.length) {
+                const buoyIdx = raceState.checkpointSequence[raceState.currentStep];
+                nextTargetEl.textContent = `🎯 ${buoys[buoyIdx].label} 号标（驶入黄圈）`;
+            } else {
+                nextTargetEl.textContent = '🎯 返回终点线';
+            }
+        }
+
+        function normalizeAngle(a) {
+            while (a > Math.PI) a -= Math.PI * 2;
+            while (a < -Math.PI) a += Math.PI * 2;
+            return a;
+        }
+
+        function updateWind(delta) {
+            windState.changeTimer -= delta;
+            if (windState.changeTimer <= 0) {
+                windState.targetDirection = windState.baseDirection + (Math.random() - 0.5) * 0.52;
+                windState.targetPower = 4 + Math.random() * 3;
+                windState.changeTimer = 15 + Math.random() * 15;
+            }
+            windState.direction += (windState.targetDirection - windState.direction) * 0.15 * delta;
+            windState.power += (windState.targetPower - windState.power) * 0.3 * delta;
+            windState.power = Math.max(windState.minPower, Math.min(windState.maxPower, windState.power));
+            updateWindVector();
+
+            windPowerSpan.textContent = windState.power.toFixed(1);
+            windBar.style.width = (windState.power / windState.maxPower * 100) + '%';
+
+            const cssAngle = windState.direction * 180 / Math.PI;
+            windArrowMini.style.transform = `translate(-50%, -100%) rotate(${cssAngle}deg)`;
+        }
+
+        function computeSailEfficiency(relativeWindAngle) {
+            const angle = Math.abs(relativeWindAngle);
+            const angleDeg = angle * 180 / Math.PI;
+
+            let angleEfficiency;
+            if (angleDeg < 30) {
+                angleEfficiency = (angleDeg / 30) * 0.15;
+            } else if (angleDeg < 60) {
+                angleEfficiency = 0.15 + (angleDeg - 30) / 30 * 0.95;
+            } else if (angleDeg < 120) {
+                const t = (angleDeg - 60) / 60;
+                angleEfficiency = 1.1 + Math.sin(t * Math.PI) * 0.1;
+            } else if (angleDeg < 160) {
+                const t = (angleDeg - 120) / 40;
+                angleEfficiency = 1.1 - t * 0.3;
+            } else {
+                const t = (angleDeg - 160) / 20;
+                angleEfficiency = 0.8 - t * 0.3;
+            }
+
+            let optimalTrim;
+            if (angleDeg < 60) optimalTrim = 0.85;
+            else if (angleDeg < 120) optimalTrim = 0.55;
+            else optimalTrim = 0.25;
+
+            const trimDeviation = Math.abs(boatState.sailTrim - optimalTrim);
+            let trimEfficiency = 1.0 - trimDeviation * 1.5;
+            trimEfficiency = Math.max(0.15, Math.min(1.0, trimEfficiency));
+
+            const windFactor = windState.power / 7;
+            let efficiency = angleEfficiency * trimEfficiency * windFactor;
+            return Math.max(0, Math.min(1.4, efficiency));
+        }
+
+        function checkBuoyCollisions(delta) {
+            const boatX = boatGroup.position.x;
+            const boatZ = boatGroup.position.z;
+
+            for (let i = 0; i < buoys.length; i++) {
+                const buoy = buoys[i];
+                const dx = boatX - buoy.x;
+                const dz = boatZ - buoy.z;
+                const distSq = dx * dx + dz * dz;
+                const minDist = BOAT_RADIUS + buoy.radius;
+
+                if (distSq < minDist * minDist) {
+                    const dist = Math.sqrt(distSq);
+                    let nx, nz;
+                    if (dist > 0.001) {
+                        nx = dx / dist;
+                        nz = dz / dist;
+                    } else {
+                        const angle = Math.random() * Math.PI * 2;
+                        nx = Math.cos(angle);
+                        nz = Math.sin(angle);
+                    }
+
+                    const overlap = minDist - dist + 0.05;
+                    boatGroup.position.x += nx * overlap;
+                    boatGroup.position.z += nz * overlap;
+
+                    boatState.knockbackX += nx * 3.5;
+                    boatState.knockbackZ += nz * 3.5;
+
+                    if (boatState.speed > 0.3) boatState.speed *= 0.55;
+
+                    buoy.stuckTimer += delta;
+
+                    if (buoy.stuckTimer > 0.4) {
+                        const forceDist = minDist + 1.5;
+                        boatGroup.position.x = buoy.x + nx * forceDist;
+                        boatGroup.position.z = buoy.z + nz * forceDist;
+                        boatState.knockbackX += nx * 8;
+                        boatState.knockbackZ += nz * 8;
+                        boatState.speed = Math.max(boatState.speed, 2.0);
+                        buoy.stuckTimer = 0;
+                    }
+
+                    if (boatState.hitCooldown <= 0) {
+                        boatState.hitCooldown = 0.6;
+                        hitFlash.style.opacity = '1';
+                        showToast('💥 撞到浮标！', true);
+                        setTimeout(() => {
+                            hitFlash.style.opacity = '0';
+                        }, 150);
+                    }
+                } else {
+                    buoy.stuckTimer = 0;
+                }
+            }
+        }
+
+        function checkRaceProgress() {
+            const boatX = boatGroup.position.x;
+            const boatZ = boatGroup.position.z;
+            const prevZ = raceState.lastPos.z;
+
+            if (!raceState.crossedStartLine) {
+                const crossed = (prevZ > START_LINE_Z && boatZ <= START_LINE_Z) ||
+                                (prevZ < START_LINE_Z && boatZ >= START_LINE_Z);
+                if (crossed && Math.abs(boatX) < START_LINE_X_RANGE && Math.abs(prevZ - boatZ) > 0.001) {
+                    raceState.crossedStartLine = true;
+                    raceState.raceActive = true;
+                    raceState.startTime = performance.now();
+                    raceState.currentStep = 0;
+                    showToast('🚩 出发！');
+                    highlightNextCheckpoint();
+                    updateNextTargetText();
+                }
+                return;
+            }
+
+            if (raceState.currentStep < raceState.checkpointSequence.length) {
+                const buoyIdx = raceState.checkpointSequence[raceState.currentStep];
+                const targetBuoy = buoys[buoyIdx];
+                const dx = boatX - targetBuoy.x;
+                const dz = boatZ - targetBuoy.z;
+                const dist = Math.sqrt(dx*dx + dz*dz);
+
+                if (dist < CHECKPOINT_RADIUS && !targetBuoy.visited) {
+                    targetBuoy.visited = true;
+                    raceState.checkpointsHit++;
+
+                    targetBuoy.sphereMaterial.color.setHex(0x33ff66);
+                    targetBuoy.sphereMaterial.emissive.setHex(0x33ff66);
+                    targetBuoy.sphereMaterial.emissiveIntensity = 2.0;
+                    targetBuoy.ringMat.color.setHex(0x33ff66);
+                    targetBuoy.ringMat.emissive.setHex(0x33ff66);
+
+                    if (targetBuoy.checkpointZone) {
+                        targetBuoy.checkpointZone.ringMat.color.setHex(0x33ff66);
+                        targetBuoy.checkpointZone.fillMat.color.setHex(0x33ff66);
+                        targetBuoy.checkpointZone.dashes.forEach(d => d.material.color.setHex(0x33ff66));
+                    }
+
+                    showToast(`✅ 绕过 ${targetBuoy.label} 号标`);
+                    raceState.currentStep++;
+                    if (raceState.currentStep < raceState.checkpointSequence.length) {
+                        highlightNextCheckpoint();
+                    }
+                    updateNextTargetText();
+                }
+            } else {
+                const crossedBack = (prevZ < START_LINE_Z && boatZ >= START_LINE_Z) ||
+                                    (prevZ > START_LINE_Z && boatZ <= START_LINE_Z);
+                if (crossedBack && Math.abs(boatX) < START_LINE_X_RANGE && Math.abs(prevZ - boatZ) > 0.001) {
+                    raceState.lapCount++;
+                    raceState.checkpointsHit = 0;
+                    raceState.currentStep = 0;
+                    raceState.crossedStartLine = false;
+                    raceState.raceActive = false;
+
+                    for (let i = 2; i < buoys.length; i++) {
+                        buoys[i].visited = false;
+                        buoys[i].sphereMaterial.color.setHex(0xff3333);
+                        buoys[i].sphereMaterial.emissive.setHex(0xff3333);
+                        buoys[i].sphereMaterial.emissiveIntensity = 0.5;
+                        buoys[i].ringMat.color.setHex(0xff3333);
+                        buoys[i].ringMat.emissive.setHex(0xff3333);
+                        if (buoys[i].checkpointZone) {
+                            buoys[i].checkpointZone.ringMat.color.setHex(0xffaa00);
+                            buoys[i].checkpointZone.fillMat.color.setHex(0xffaa00);
+                            buoys[i].checkpointZone.dashes.forEach(d => d.material.color.setHex(0xffdd44));
+                        }
+                    }
+
+                    showToast(`🏁 完成第 ${raceState.lapCount} 圈！`);
+                    updateNextTargetText();
+                }
+            }
+        }
+
+        function highlightNextCheckpoint() {
+            for (let i = 2; i < buoys.length; i++) {
+                if (!buoys[i].visited) {
+                    buoys[i].sphereMaterial.color.setHex(0xff3333);
+                    buoys[i].sphereMaterial.emissive.setHex(0xff3333);
+                    buoys[i].sphereMaterial.emissiveIntensity = 0.5;
+                    buoys[i].ringMat.color.setHex(0xff3333);
+                    buoys[i].ringMat.emissive.setHex(0xff3333);
+                    if (buoys[i].checkpointZone) {
+                        buoys[i].checkpointZone.ringMat.color.setHex(0xffaa00);
+                        buoys[i].checkpointZone.fillMat.color.setHex(0xffaa00);
+                        buoys[i].checkpointZone.dashes.forEach(d => d.material.color.setHex(0xffdd44));
+                    }
+                }
+            }
+            if (raceState.currentStep < raceState.checkpointSequence.length) {
+                const buoyIdx = raceState.checkpointSequence[raceState.currentStep];
+                const buoy = buoys[buoyIdx];
+                buoy.sphereMaterial.emissiveIntensity = 1.2;
+                buoy.ringMat.color.setHex(0xffff00);
+                buoy.ringMat.emissive.setHex(0xffff00);
+                if (buoy.checkpointZone) {
+                    buoy.checkpointZone.ringMat.color.setHex(0xffff00);
+                    buoy.checkpointZone.fillMat.color.setHex(0xffff00);
+                    buoy.checkpointZone.dashes.forEach(d => d.material.color.setHex(0xffff00));
+                }
+            }
+        }
+
+        function updateCameraFollow() {
+            cameraState.smoothYaw += (cameraState.yaw - cameraState.smoothYaw) * 0.15;
+            cameraState.smoothPitch += (cameraState.pitch - cameraState.smoothPitch) * 0.15;
+
+            const targetX = boatGroup.position.x + cameraState.targetOffset.x;
+            const targetY = boatGroup.position.y + cameraState.targetOffset.y;
+            const targetZ = boatGroup.position.z + cameraState.targetOffset.z;
+
+            const cosPitch = Math.cos(cameraState.smoothPitch);
+            const sinPitch = Math.sin(cameraState.smoothPitch);
+            const cosYaw = Math.cos(cameraState.smoothYaw);
+            const sinYaw = Math.sin(cameraState.smoothYaw);
+
+            const camX = targetX + cameraState.distance * cosPitch * sinYaw;
+            const camY = targetY + cameraState.distance * sinPitch;
+            const camZ = targetZ + cameraState.distance * cosPitch * cosYaw;
+
+            camera.position.lerp(new THREE.Vector3(camX, camY, camZ), 0.2);
+            camera.lookAt(targetX, targetY, targetZ);
+        }
+
+        let clock = new THREE.Clock();
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const delta = clock.getDelta();
+            const time = performance.now() * 0.001;
+            const safeDelta = Math.min(delta, 0.1);
+
+            if (isPaused) {
+                renderer.render(scene, camera);
+                return;
+            }
+
+            if (leftJoystick.active) {
+                cameraState.yaw += leftJoystick.x * 1.2 * safeDelta;
+                cameraState.pitch += leftJoystick.y * 1.2 * safeDelta;
+                cameraState.pitch = Math.max(0.05, Math.min(1.4, cameraState.pitch));
+            }
+
+            boatState.rudder = rudderJoystick.x;
+            rudderJoystick.updateAutoCenter(safeDelta);
+
+            if (sailJoystick.active) {
+                const trimInput = -sailJoystick.y;
+                boatState.sailTrim += trimInput * 0.35 * safeDelta;
+                boatState.sailTrim = Math.max(0, Math.min(1, boatState.sailTrim));
+            }
+
+            updateWind(safeDelta);
+            if (boatState.hitCooldown > 0) boatState.hitCooldown -= safeDelta;
+
+            const boatDirX = Math.sin(boatState.heading);
+            const boatDirZ = -Math.cos(boatState.heading);
+            const boatDir = new THREE.Vector3(boatDirX, 0, boatDirZ);
+            const windVec = windState.vector.clone();
+            const dot = boatDir.dot(windVec);
+            const relativeWindAngle = Math.acos(Math.max(-1, Math.min(1, dot)));
+
+            const sailEfficiency = computeSailEfficiency(relativeWindAngle);
+
+            const speedFactor = Math.min(1, boatState.speed / 2);
+            const turnForce = boatState.rudder * 0.8 * speedFactor;
+            boatState.heading += turnForce * safeDelta * 2.5;
+            boatState.heading = normalizeAngle(boatState.heading);
+
+            const thrust = sailEfficiency * 1.0;
+            const drag = boatState.speed * 0.06 + boatState.speed * boatState.speed * 0.012;
+            const acceleration = thrust - drag;
+            boatState.speed += acceleration * safeDelta * 3;
+            if (boatState.speed < 0) boatState.speed = 0;
+            if (boatState.speed > boatState.maxSpeed) boatState.speed = boatState.maxSpeed;
+
+            const angleDeg = relativeWindAngle * 180 / Math.PI;
+            if (angleDeg < 25 && boatState.speed > 0.5) {
+                boatState.speed -= 0.5 * safeDelta * 3;
+                if (boatState.speed < 0) boatState.speed = 0;
+            }
+
+            raceState.lastPos.copy(boatGroup.position);
+
+            const moveDirX = Math.sin(boatState.heading);
+            const moveDirZ = -Math.cos(boatState.heading);
+            boatGroup.position.x += moveDirX * boatState.speed * safeDelta * 1.2;
+            boatGroup.position.z += moveDirZ * boatState.speed * safeDelta * 1.2;
+
+            boatGroup.position.x += boatState.knockbackX * safeDelta;
+            boatGroup.position.z += boatState.knockbackZ * safeDelta;
+
+            boatState.knockbackX *= Math.pow(0.02, safeDelta);
+            boatState.knockbackZ *= Math.pow(0.02, safeDelta);
+            if (Math.abs(boatState.knockbackX) < 0.01) boatState.knockbackX = 0;
+            if (Math.abs(boatState.knockbackZ) < 0.01) boatState.knockbackZ = 0;
+
+            const limit = 55;
+            boatGroup.position.x = Math.max(-limit, Math.min(limit, boatGroup.position.x));
+            boatGroup.position.z = Math.max(-limit, Math.min(limit, boatGroup.position.z));
+
+            checkBuoyCollisions(safeDelta);
+            checkRaceProgress();
+
+            const rightX = Math.cos(boatState.heading);
+            const rightZ = Math.sin(boatState.heading);
+            const windLateral = windVec.x * rightX + windVec.z * rightZ;
+
+            const windHeelForce = -windLateral * sailEfficiency * (1 - boatState.sailTrim * 0.4);
+            const windPowerFactor = windState.power / 8;
+            const turnHeelForce = -boatState.rudder * speedFactor * 0.4;
+
+            const maxHeel = Math.PI * 0.14;
+            let targetHeel = (windHeelForce * 1.8 + turnHeelForce) * windPowerFactor;
+            targetHeel = Math.max(-maxHeel, Math.min(maxHeel, targetHeel));
+            boatState.heelTarget = targetHeel;
+            boatState.heel += (boatState.heelTarget - boatState.heel) * 2.5 * safeDelta;
+
+            const accelPitch = -acceleration * 0.06;
+            const wavePitch = Math.sin(time * 2.5) * 0.02;
+            boatState.pitchTarget = accelPitch + wavePitch;
+            boatState.pitch += (boatState.pitchTarget - boatState.pitch) * 3 * safeDelta;
+
+            boatGroup.rotation.y = Math.PI / 2 - boatState.heading;
+            boatTiltGroup.rotation.x = boatState.heel;
+            boatTiltGroup.rotation.z = boatState.pitch;
+
+            boatGroup.position.y = 0.1 + Math.sin(time * 3) * 0.08;
+
+            rudderPivot.rotation.y = boatState.rudder * 0.6;
+
+            const localZWorldX = Math.cos(boatState.heading);
+            const localZWorldZ = Math.sin(boatState.heading);
+            const windFromLocalZ = windVec.x * localZWorldX + windVec.z * localZWorldZ;
+            const sideSign = windFromLocalZ > 0 ? -1 : 1;
+
+            const maxSwing = (1 - boatState.sailTrim * 0.85) * (Math.PI * 0.45);
+            const windAngleFactor = 0.3 + Math.sin(relativeWindAngle) * 0.7;
+            const targetSailVisual = sideSign * maxSwing * windAngleFactor;
+
+            boatState.sailVisual += (targetSailVisual - boatState.sailVisual) * 0.08;
+            mainSailGroup.rotation.y = boatState.sailVisual;
+
+            const maxJibSwing = (1 - boatState.sailTrim * 0.75) * (Math.PI * 0.5);
+            const targetJibVisual = sideSign * maxJibSwing * windAngleFactor;
+            boatState.jibVisual += (targetJibVisual - boatState.jibVisual) * 0.08;
+            jibGroup.rotation.y = boatState.jibVisual;
+
+            for (let i = 0; i < buoys.length; i++) {
+                const buoy = buoys[i];
+                const bob = Math.sin(time * 1.5 + buoy.phaseOffset) * 0.15;
+                const tiltX = Math.sin(time * 1.2 + buoy.phaseOffset) * 0.05;
+                const tiltZ = Math.cos(time * 1.3 + buoy.phaseOffset) * 0.05;
+                buoy.mesh.position.y = buoy.baseY + bob;
+                buoy.mesh.rotation.x = tiltX;
+                buoy.mesh.rotation.z = tiltZ;
+            }
+
+            if (raceState.raceActive && raceState.currentStep < raceState.checkpointSequence.length) {
+                const buoyIdx = raceState.checkpointSequence[raceState.currentStep];
+                const buoy = buoys[buoyIdx];
+                const pulse = 1.2 + Math.sin(time * 6) * 0.8;
+                buoy.sphereMaterial.emissiveIntensity = pulse;
+                if (buoy.checkpointZone) {
+                    const zonePulse = 0.4 + Math.sin(time * 4) * 0.25;
+                    buoy.checkpointZone.ringMat.opacity = zonePulse;
+                    buoy.checkpointZone.fillMat.opacity = 0.05 + Math.sin(time * 4) * 0.03;
+                }
+            }
+
+            speedSpan.textContent = (boatState.speed * 2.5).toFixed(1);
+            sailValueEl.textContent = Math.round(boatState.sailTrim * 100);
+            sailBar.style.width = (boatState.sailTrim * 100) + '%';
+
+            sparkles.rotation.y += 0.0005;
+            sparkles.material.opacity = 0.5 + Math.sin(time * 5) * 0.2;
+
+            const positions = windParticles.geometry.attributes.position.array;
+            for (let i = 0; i < windParticleCount; i++) {
+                const sFactor = windParticleSpeeds[i] * windState.power * 0.05;
+                positions[i*3] += windState.vector.x * sFactor * safeDelta * 30;
+                positions[i*3+2] += windState.vector.z * sFactor * safeDelta * 30;
+                if (positions[i*3] > 40) positions[i*3] = -40;
+                if (positions[i*3] < -40) positions[i*3] = 40;
+                if (positions[i*3+2] > 40) positions[i*3+2] = -40;
+                if (positions[i*3+2] < -40) positions[i*3+2] = 40;
+                positions[i*3+1] += Math.sin(time * 2 + i) * 0.005;
+            }
+            windParticles.geometry.attributes.position.needsUpdate = true;
+
+            updateCameraFollow();
+
+            renderer.render(scene, camera);
+        }
+
+        const startOverlay = document.getElementById('start-overlay');
+        function startGame() {
+            startOverlay.classList.add('hidden');
+            isPaused = false;
+            cameraState.yaw = 0;
+            cameraState.pitch = 0.45;
+            cameraState.smoothYaw = 0;
+            cameraState.smoothPitch = 0.45;
+        }
+        startOverlay.addEventListener('click', startGame);
+        startOverlay.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            startGame();
+        });
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        boatGroup.position.copy(boatStartPos);
+        raceState.lastPos.copy(boatStartPos);
+        updateNextTargetText();
+
+        animate();
+    </script>
+</body>
+</html>
